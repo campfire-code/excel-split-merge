@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 
 // 工具声明：每个工具只描述「收什么、调什么参数、怎么处理」，界面由 kit 按抽到的布局渲染。
 
@@ -13,7 +13,11 @@ export type Field =
   | { key: string; label: string; type: 'text'; when?: (p: Params) => boolean; default: string; placeholder?: string; help?: string }
   | { key: string; label: string; type: 'textarea'; when?: (p: Params) => boolean; default: string; placeholder?: string; rows?: number; help?: string }
   | { key: string; label: string; type: 'toggle'; when?: (p: Params) => boolean; default: boolean; help?: string }
-  | { key: string; label: string; type: 'folder'; when?: (p: Params) => boolean; default: string; help?: string };
+  | { key: string; label: string; type: 'folder'; when?: (p: Params) => boolean; default: string; help?: string }
+  /** 选择单个文件：值是文件路径 */
+  | { key: string; label: string; type: 'file'; when?: (p: Params) => boolean; extensions: string[]; fileLabel: string; default: string; help?: string }
+  /** 多选：值是用英文逗号连接的选项键，例如 "taobao,pdd" */
+  | { key: string; label: string; type: 'multi'; when?: (p: Params) => boolean; options: [string, string][]; default: string; help?: string };
 
 export type Params = Record<string, string | number | boolean>;
 
@@ -33,8 +37,12 @@ export interface ItemResult {
   outputPath?: string;
   /** 预览：本机图片路径或 data: 地址 */
   preview?: string;
-  /** 文本结果（生成模式），可一键复制 */
+  /** 文本结果（生成模式），显示在界面上 */
   text?: string;
+  /** 点「复制」时复制的内容，不填就复制 text */
+  copyText?: string;
+  /** 条目显示名（生成模式默认「第 N 条」） */
+  title?: string;
   /** 表格结果的一行，键对应 ToolDef.columns */
   row?: Record<string, string | number>;
   /** 留给 afterAll 用的数据，不显示 */
@@ -51,6 +59,8 @@ export interface RunContext {
   readText(path: string): Promise<string>;
   writeFile(path: string, data: Uint8Array): Promise<void>;
   writeText(path: string, text: string): Promise<void>;
+  /** 建文件夹（含上级）；writeFile / writeText 也会自动建好上级文件夹 */
+  mkdir(path: string): Promise<void>;
   join(...parts: string[]): Promise<string>;
   /** 调用用户配置的大模型（OpenAI 兼容接口），返回回复文本 */
   llm(messages: { role: 'system' | 'user' | 'assistant'; content: string }[], opts?: { json?: boolean; temperature?: number }): Promise<string>;
@@ -67,6 +77,8 @@ interface ToolBase {
   type: ToolType;
   params: Field[];
   needsLLM?: boolean;
+  /** 工具图标（lucide-react 的图标组件），用在侧栏 logo 和导航里；不填用图片图标 */
+  icon?: ComponentType<{ size?: number }>;
   /** 结果展示形态 */
   resultView: 'list' | 'table' | 'cards' | 'text';
   /** resultView=table 时的列：[键, 标题] */
@@ -92,6 +104,8 @@ export interface GenerateTool extends ToolBase {
   mode: 'generate';
   /** 一次生成几条，由参数决定时返回数量 */
   count?: (params: Params) => number;
+  /** 生成前的条目名，例如按日期显示「10月24日 第1条」，不填为「第 N 条」 */
+  itemName?: (index: number, params: Params) => string;
   generate(index: number, ctx: RunContext): Promise<ItemResult>;
   generateLabel?: string;
 }
@@ -102,7 +116,7 @@ export interface CustomTool extends Omit<ToolBase, 'resultView'> {
   resultView?: never;
   /** 主页面在导航里的名字，默认「主页」 */
   mainLabel?: string;
-  Main: (props: { ctx: Pick<RunContext, 'readFile' | 'readText' | 'writeFile' | 'writeText' | 'join' | 'llm' | 'sidecar'> }) => ReactNode;
+  Main: (props: { ctx: Pick<RunContext, 'readFile' | 'readText' | 'writeFile' | 'writeText' | 'mkdir' | 'join' | 'llm' | 'sidecar'> }) => ReactNode;
 }
 
 export type ToolDef = BatchTool | GenerateTool | CustomTool;

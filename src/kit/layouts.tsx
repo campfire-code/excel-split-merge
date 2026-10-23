@@ -17,7 +17,8 @@ export interface LayoutProps {
   setPage: (p: Page) => void;
 }
 
-const PAGES: [Page, string, typeof ImageIcon][] = [
+type IconType = Runner['tool']['icon'] | typeof ImageIcon;
+const PAGES: [Page, string, NonNullable<IconType>][] = [
   ['main', '', ImageIcon],
   ['history', '处理记录', Clock],
   ['settings', '设置', KeyRound],
@@ -25,7 +26,7 @@ const PAGES: [Page, string, typeof ImageIcon][] = [
 ];
 const mainLabel = (r: Runner) => (r.tool.mode === 'batch' ? '批量处理' : r.tool.mode === 'generate' ? '生成' : r.tool.mainLabel ?? '主页');
 /** 用不到大模型的工具不出现「设置」页，外观切换放在「关于」里 */
-const pagesFor = (r: Runner) => PAGES.filter(([p]) => (p !== 'settings' || r.tool.needsLLM) && (p !== 'history' || r.tool.mode !== 'custom'));
+const pagesFor = (r: Runner) => PAGES.map(([p, l, I]) => [p, l, p === 'main' && r.tool.icon ? r.tool.icon : I] as typeof PAGES[number]).filter(([p]) => (p !== 'settings' || r.tool.needsLLM) && (p !== 'history' || r.tool.mode !== 'custom'));
 
 function SubPage({ page, runner, meta }: { page: Page; runner: Runner; meta: ToolMeta }) {
   if (page === 'history') return <HistoryPage runner={runner} />;
@@ -50,7 +51,7 @@ function Results({ runner, variant, selected, onSelect }: { runner: Runner; vari
       <div className="k-texts">
         {runner.rows.map((r) => (
           <div key={r.item.id} className="k-text-card">
-            <div className="k-text-head"><b>{r.item.name}</b><StatusChip row={r} short /></div>
+            <div className="k-text-head"><b>{r.result?.title ?? r.item.name}</b><StatusChip row={r} short /></div>
             {r.status === 'err' && <span className="k-err-text">{r.error}</span>}
             <ResultText row={r} />
           </div>
@@ -61,19 +62,19 @@ function Results({ runner, variant, selected, onSelect }: { runner: Runner; vari
   if (v === 'table') {
     const cols = t.columns ?? [];
     return (
-      <table className="k-table">
+      <div className="k-table-wrap"><table className="k-table">
         <thead><tr><th>{t.mode === 'batch' ? '文件' : '序号'}</th>{cols.map(([k, l]) => <th key={k}>{l}</th>)}<th>状态</th><th aria-label="操作" /></tr></thead>
         <tbody>
           {runner.rows.map((r) => (
             <tr key={r.item.id} className={selected === r.item.id ? 'sel' : ''} onClick={() => onSelect?.(r.item.id)}>
-              <td className="k-name">{t.type === 'media' && <Thumb row={r} runner={runner} />}{r.item.name}</td>
-              {cols.map(([k]) => <td key={k} className="k-num">{r.result?.row?.[k] ?? ''}</td>)}
+              <td><span className="k-name">{t.type === 'media' && <Thumb row={r} runner={runner} />}<span className="k-name-text"><span className="k-ellipsis" title={r.item.name}>{r.result?.title ?? r.item.name}</span>{r.status === 'err' && <small className="k-err-text" title={r.error}>{r.error}</small>}</span></span></td>
+              {cols.map(([k]) => { const v = r.result?.row?.[k] ?? ''; return <td key={k} className="k-num k-cell" title={String(v)}>{v}</td>; })}
               <td><StatusChip row={r} short={cols.length > 2} /></td>
               <td><RowActions row={r} /></td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     );
   }
   if (v === 'cards') {
@@ -117,7 +118,7 @@ function LayoutA({ runner, meta, hover, page, setPage }: LayoutProps) {
   return (
     <div className="L-a">
       <nav className="a-side" aria-label="导航">
-        <div className="a-brand"><span className="a-logo"><ImageIcon size={18} /></span><span className="a-brand-text"><span>{meta.name}</span><BrandMark /></span></div>
+        <div className="a-brand"><span className="a-logo">{(() => { const I = runner.tool.icon ?? ImageIcon; return <I size={18} />; })()}</span><span className="a-brand-text"><span>{meta.name}</span><BrandMark /></span></div>
         {pagesFor(runner).map(([p, l, I]) => (
           <button key={p} className={`a-nav${page === p ? ' on' : ''}`} onClick={() => setPage(p)} aria-current={page === p}><I size={16} />{l || mainLabel(runner)}</button>
         ))}
@@ -172,7 +173,7 @@ function LayoutB({ runner, meta, hover, page, setPage }: LayoutProps) {
           </aside>
         </div>
       )}
-      <div className="b-status"><Footer runner={runner} /><span className="b-sp" /><span className="k-muted">{meta.name} {meta.version}</span><BrandMark /></div>
+      <div className="b-status">{runner.tool.mode !== 'custom' && <Footer runner={runner} />}<span className="b-sp" /><span className="k-muted">{meta.name} {meta.version}</span><BrandMark /></div>
     </div>
   );
 }
@@ -207,7 +208,7 @@ function LayoutC({ runner, meta, hover, page, setPage }: LayoutProps) {
   if (runner.tool.mode === 'custom') {
     return (
       <div className="L-c">
-        <div className="c-steps"><b className="c-title">{meta.name}</b><span className="c-sp" style={{ flex: 1 }} />{pagesFor(runner).map(([p, l, I]) => <button key={p} className={`k-btn ghost${page === p ? ' on' : ''}`} onClick={() => setPage(p)}><I size={15} />{l || '主页'}</button>)}</div>
+        <div className="c-steps"><b className="c-title">{meta.name}</b><span className="c-sp" style={{ flex: 1 }} />{pagesFor(runner).map(([p, l, I]) => <button key={p} className={`k-btn ghost${page === p ? ' on' : ''}`} onClick={() => setPage(p)}><I size={15} />{l || mainLabel(runner)}</button>)}</div>
         <main className="c-body k-scroll">{page === 'main' ? <CustomMain runner={runner} /> : <SubPage page={page} runner={runner} meta={meta} />}</main>
         <footer className="c-foot"><span /><span className="k-muted c-mid"><BrandMark /></span><span /></footer>
       </div>

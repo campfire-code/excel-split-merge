@@ -1,16 +1,16 @@
 // 各布局共用的小部件：状态标签、进度条、缩略图、参数表单、拖放区、设置 / 记录 / 关于页。
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Check, X, Loader2, FileText, FolderOpen, Copy, Plus, FolderPlus, Upload, ExternalLink } from 'lucide-react';
 import type { Field, ToolMeta } from './types';
 import { BRAND } from './brand';
 import type { Row, Runner } from './runner';
-import { fileSrc, openFolder, openLink, pickFiles, pickFolder, reveal } from './platform';
+import { addDropListener, fileSrc, openFolder, openLink, pickFiles, pickFolder, reveal } from './platform';
 import { LLM_PRESETS, chat, llmReady, saveSettings, useSettings, type ThemePref } from './settings';
 
 export const pct = (r: number) => `${Math.round(r * 100)}%`;
 
 export function StatusChip({ row, short }: { row: Row; short?: boolean }) {
-  if (row.status === 'ok') return <span className="k-st ok"><Check size={12} />{short ? '完成' : row.result?.summary || '已完成'}</span>;
+  if (row.status === 'ok') return <span className="k-st ok" title={row.result?.summary}><Check size={12} />{short ? '完成' : row.result?.summary || '已完成'}</span>;
   if (row.status === 'err') return <span className="k-st err" title={row.error}><X size={12} />{short ? '失败' : `失败：${row.error}`}</span>;
   if (row.status === 'run') return <span className="k-st run"><Loader2 size={12} className="k-spin" />处理中 {pct(row.progress)}</span>;
   return <span className="k-st wait">等待中</span>;
@@ -34,7 +34,7 @@ export function RowActions({ row }: { row: Row }) {
   return (
     <span className="k-row-actions">
       {r.outputPath && <button className="k-icon-btn" aria-label="在文件夹中显示" title="在文件夹中显示" onClick={() => reveal(r.outputPath!)}><FolderOpen size={15} /></button>}
-      {r.text && <CopyButton text={r.text} />}
+      {(r.copyText ?? r.text) && <CopyButton text={(r.copyText ?? r.text)!} />}
     </span>
   );
 }
@@ -85,6 +85,30 @@ export function FieldControl({ field, value, onChange, disabled }: { field: Fiel
     case 'toggle':
       control = (
         <label className="k-toggle"><input id={id} type="checkbox" checked={Boolean(value)} disabled={disabled} onChange={(e) => onChange(e.target.checked)} /><span>{value ? '开' : '关'}</span></label>
+      );
+      break;
+    case 'multi': {
+      const set = new Set(String(value).split(',').filter(Boolean));
+      control = (
+        <div className="k-multi" role="group" aria-label={field.label}>
+          {field.options.map(([v, l]) => (
+            <label key={v} className={`k-chip${set.has(v) ? ' on' : ''}`}>
+              <input type="checkbox" checked={set.has(v)} disabled={disabled} onChange={(e) => {
+                const next = new Set(set);
+                if (e.target.checked) next.add(v); else next.delete(v);
+                onChange(field.options.map(([k]) => k).filter((k) => next.has(k)).join(','));
+              }} />{l}
+            </label>
+          ))}
+        </div>
+      );
+      break;
+    }
+    case 'file':
+      control = (
+        <button id={id} className="k-input k-folder" disabled={disabled} onClick={async () => { const [p] = await pickFiles(field.extensions, field.fileLabel); if (p) onChange(p); }}>
+          <span>{String(value) ? String(value).split(/[\\/]/).pop() : `选择${field.fileLabel}`}</span><FileText size={14} />
+        </button>
       );
       break;
     case 'folder':
@@ -179,7 +203,7 @@ export function EmptyState({ runner, hover }: { runner: Runner; hover: boolean }
 
 export function ResultText({ row }: { row: Row }) {
   if (row.status !== 'ok' || !row.result?.text) return null;
-  return <div className="k-result-text"><pre>{row.result.text}</pre><CopyButton text={row.result.text} label="复制" /></div>;
+  return <div className="k-result-text"><pre>{row.result.text}</pre><CopyButton text={row.result.copyText ?? row.result.text} label="复制" /></div>;
 }
 
 // ---------- 设置 / 记录 / 关于 ----------
@@ -280,3 +304,12 @@ export const BrandMark = () => <span className="k-brand" title={BRAND.statement}
 
 /** 按 when 条件过滤当前要显示的参数 */
 export const visibleFields = (runner: Runner) => runner.tool.params.filter((f) => !f.when || f.when(runner.params));
+
+/** 自定义型工具里接收拖进窗口的文件：返回是否正在拖动经过窗口 */
+export function useDroppedFiles(onFiles: (paths: string[]) => void) {
+  const [hover, setHover] = useState(false);
+  const ref = useRef(onFiles);
+  ref.current = onFiles;
+  useEffect(() => addDropListener({ onFiles: (p) => ref.current(p), onHover: setHover }), []);
+  return hover;
+}

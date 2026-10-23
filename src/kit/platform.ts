@@ -1,7 +1,7 @@
 // 对 Tauri 插件的薄封装：界面和工具代码只经过这里访问本机能力。
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile, writeFile, readTextFile, writeTextFile, mkdir, exists, readDir, stat } from '@tauri-apps/plugin-fs';
-import { join, downloadDir, basename, extname } from '@tauri-apps/api/path';
+import { join, downloadDir, basename, extname, dirname } from '@tauri-apps/api/path';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { Command } from '@tauri-apps/plugin-shell';
@@ -60,6 +60,10 @@ export async function ensureDir(path: string) {
   if (!(await exists(path))) await mkdir(path, { recursive: true });
 }
 
+export async function ensureParent(path: string) {
+  await ensureDir(await dirname(path));
+}
+
 export async function defaultOutputDir(toolName: string) {
   return join(await downloadDir(), toolName);
 }
@@ -79,3 +83,13 @@ export async function runSidecar(args: string[]): Promise<string> {
 
 let storePromise: Promise<Store> | null = null;
 export const settingsStore = () => (storePromise ??= load('settings.json', { autoSave: true, defaults: {} }));
+
+// 自定义型工具接收拖入的文件：框架把拖入事件转发给这里登记的处理函数
+type DropListener = { onFiles: (paths: string[]) => void; onHover?: (on: boolean) => void };
+const dropListeners = new Set<DropListener>();
+export const emitDrop = (paths: string[]) => dropListeners.forEach((l) => l.onFiles(paths));
+export const emitHover = (on: boolean) => dropListeners.forEach((l) => l.onHover?.(on));
+export function addDropListener(l: DropListener) {
+  dropListeners.add(l);
+  return () => void dropListeners.delete(l);
+}

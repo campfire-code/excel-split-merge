@@ -2,7 +2,7 @@ import { Component, useEffect, useState, type ReactNode } from 'react';
 import type { ToolDef, ToolMeta } from './types';
 import { useToolRunner } from './runner';
 import { LAYOUTS, type Page } from './layouts';
-import { onFileDrop } from './platform';
+import { emitDrop, emitHover, onFileDrop } from './platform';
 import { useSettings } from './settings';
 import './kit.css';
 
@@ -35,13 +35,15 @@ export function KitApp({ tool, meta, size = 'std' }: { tool: ToolDef; meta: Tool
   const { addPaths, running } = runner;
   useEffect(() => {
     let off: (() => void) | undefined;
+    const custom = tool.mode === 'custom';
     onFileDrop((paths) => {
       if (running) return;
       setPage('main');
-      addPaths(paths);
-    }, setHover).then((u) => (off = u));
+      if (custom) emitDrop(paths);
+      else addPaths(paths);
+    }, (on) => (custom ? emitHover(on) : setHover(on))).then((u) => (off = u));
     return () => off?.();
-  }, [addPaths, running]);
+  }, [addPaths, running, tool.mode]);
 
   const Layout = LAYOUTS[meta.ui.layout];
   return <Layout runner={runner} meta={meta} hover={hover} page={page} setPage={setPage} />;

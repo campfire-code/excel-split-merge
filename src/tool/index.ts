@@ -1,4 +1,5 @@
 // 工具声明：Excel 拆分与合并
+import { Table2 as Table2AsIcon } from 'lucide-react';
 import type { BatchTool, Params, RunContext } from '../kit/types';
 import { baseName, mergeTables, resolveColumn, safeName, splitByColumn, toTable, type Table } from './core';
 import { readSheets, writeCsv, writeXlsx } from './xlsx';
@@ -25,6 +26,7 @@ const tool: BatchTool = {
   id: 'o07',
   name: 'Excel 拆分与合并',
   tagline: '按某一列把一张表拆成多个文件，或把多个表格合成一张，表头自动对齐。支持 .xlsx 和 .csv，中文 CSV 不乱码。',
+  icon: Table2AsIcon,
   category: '办公提效',
   type: 'data',
   mode: 'batch',

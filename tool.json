@@ -1,0 +1,13 @@
+{
+  "id": "o07",
+  "slug": "excel-split-merge",
+  "name": "Excel 拆分与合并",
+  "version": "0.1.0",
+  "repo": "campfire-code/excel-split-merge",
+  "license": "MIT",
+  "ui": {
+    "layout": "e",
+    "palette": "green"
+  },
+  "upstream": null
+}
